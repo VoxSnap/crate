@@ -490,6 +490,14 @@ public class Session implements AutoCloseable {
         pendingExecutions.clear();
     }
 
+    public byte transactionStatusMessage() {
+        return sessionContext.transactionStatus().message();
+    }
+
+    public void transactionStatus(TransactionContext.TransactionStatus status) {
+        sessionContext.transactionStatus(status);
+    }
+
     static class ParameterTypeExtractor extends DefaultTraversalSymbolVisitor<Void, Void> implements Consumer<Symbol> {
 
         private final SortedSet<ParameterSymbol> parameterSymbols;

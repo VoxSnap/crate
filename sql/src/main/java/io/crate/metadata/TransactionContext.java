@@ -38,6 +38,22 @@ public class TransactionContext {
     private final SessionContext sessionContext;
     private Long currentTimeMillis = null;
 
+    public enum TransactionStatus {
+        IDLE('I'),
+        IDLE_IN_TRANSACTION('T'),
+        IN_FAILED_TRANSACTION('E');
+
+        private final byte message;
+
+        TransactionStatus(char message) {
+            this.message = (byte) message;
+        }
+
+        public byte message() {
+            return message;
+        }
+    }
+
     public static TransactionContext systemTransactionContext() {
         return new TransactionContext(SessionContext.systemSessionContext());
     }

@@ -33,6 +33,7 @@ import io.crate.auth.Protocol;
 import io.crate.auth.user.User;
 import io.crate.collections.Lists2;
 import io.crate.expression.symbol.Field;
+import io.crate.metadata.TransactionContext;
 import io.crate.protocols.http.CrateNettyHttpServerTransport;
 import io.crate.protocols.postgres.types.PGType;
 import io.crate.protocols.postgres.types.PGTypes;
@@ -259,19 +260,21 @@ class PostgresWireProtocol {
 
     private static class ReadyForQueryCallback implements BiConsumer<Object, Throwable> {
         private final Channel channel;
+        private final byte transactionStatusMessage;
 
-        private ReadyForQueryCallback(Channel channel) {
+        private ReadyForQueryCallback(Channel channel, byte transactionStatusMessage) {
             this.channel = channel;
+            this.transactionStatusMessage = transactionStatusMessage;
         }
 
         @Override
         public void accept(Object result, Throwable t) {
             if (t != null) {
                 if (!(t.getCause() instanceof ClientInterrupted)) {
-                    Messages.sendReadyForQuery(channel);
+                    Messages.sendReadyForQuery(channel, transactionStatusMessage);
                 }
             } else {
-                Messages.sendReadyForQuery(channel);
+                Messages.sendReadyForQuery(channel, transactionStatusMessage);
             }
         }
     }
@@ -622,11 +625,12 @@ class PostgresWireProtocol {
             return;
         }
         try {
-            ReadyForQueryCallback readyForQueryCallback = new ReadyForQueryCallback(channel);
+            ReadyForQueryCallback readyForQueryCallback = new ReadyForQueryCallback(channel, session.transactionStatusMessage());
             session.sync().whenComplete(readyForQueryCallback);
         } catch (Throwable t) {
+            session.transactionStatus(TransactionContext.TransactionStatus.IDLE);
             Messages.sendErrorResponse(channel, t);
-            Messages.sendReadyForQuery(channel);
+            Messages.sendReadyForQuery(channel, session.transactionStatusMessage());
         }
     }
 
@@ -650,8 +654,23 @@ class PostgresWireProtocol {
         CompletableFuture<?> composedFuture = CompletableFuture.completedFuture(null);
         for (String query : queries) {
             composedFuture = composedFuture.thenCompose(result -> handleSingleQuery(query, channel));
+            updateTransactionStatusIfNeeded(query);
         }
-        composedFuture.whenComplete(new ReadyForQueryCallback(channel));
+        composedFuture.whenComplete(new ReadyForQueryCallback(channel, session.transactionStatusMessage()));
+    }
+
+    private void updateTransactionStatusIfNeeded(String query) {
+        String stmtType = query.trim().split(" ", 2)[0].toUpperCase(Locale.ENGLISH);
+        switch (stmtType) {
+            case "BEGIN":
+                session.transactionStatus(TransactionContext.TransactionStatus.IDLE_IN_TRANSACTION);
+                break;
+            case "COMMIT":
+                session.transactionStatus(TransactionContext.TransactionStatus.IDLE);
+                break;
+            default:
+                break;
+        }
     }
 
     private CompletableFuture<?> handleSingleQuery(String query, Channel channel) {
