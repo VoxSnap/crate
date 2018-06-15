@@ -25,6 +25,8 @@ package io.crate.protocols.postgres;
 import io.crate.Version;
 import io.crate.action.sql.SQLOperations;
 import io.crate.action.sql.Session;
+import io.crate.action.sql.SessionContext;
+import io.crate.analyze.Analyzer;
 import io.crate.auth.AlwaysOKNullAuthentication;
 import io.crate.auth.Authentication;
 import io.crate.auth.AuthenticationMethod;
@@ -34,6 +36,7 @@ import io.crate.concurrent.CompletableFutures;
 import io.crate.exceptions.JobKilledException;
 import io.crate.execution.engine.collect.stats.JobsLogs;
 import io.crate.planner.DependencyCarrier;
+import io.crate.planner.Planner;
 import io.crate.protocols.postgres.types.PGTypes;
 import io.crate.test.integration.CrateDummyClusterServiceUnitTest;
 import io.crate.testing.DummyUserManager;
@@ -413,6 +416,26 @@ public class PostgresWireProtocolTest extends CrateDummyClusterServiceUnitTest {
         readReadyForQueryMessage(channel);
     }
 
+    public void testTransactionStatusMessage() {
+        PostgresWireProtocol ctx =
+            new PostgresWireProtocol(
+                sqlOperations,
+                new AlwaysOKNullAuthentication(),
+                null);
+        channel = new EmbeddedChannel(ctx.decoder, ctx.handler);
+
+        ByteBuf buffer = Unpooled.buffer();
+        ClientMessages.sendStartupMessage(buffer, "doc");
+        channel.writeInbound(buffer);
+        readReadyForQueryMessage(channel);
+        ClientMessages.sendParseMessage(buffer, "", "BEGIN", new int[0]);
+        ClientMessages.sendFlush(buffer);
+        readReadyForQueryMessage(channel, 'T');
+
+        channel.writeInbound(buffer);
+        assertThat(channel.outboundMessages().size() , is(0));
+    }
+
     private void submitQueriesThroughSimpleQueryMode(String statements, @Nullable Throwable failure) {
         SQLOperations sqlOperations = Mockito.mock(SQLOperations.class);
         Session session = mock(Session.class);
@@ -481,11 +504,15 @@ public class PostgresWireProtocolTest extends CrateDummyClusterServiceUnitTest {
     }
 
     private static void readReadyForQueryMessage(EmbeddedChannel channel) {
+        readReadyForQueryMessage(channel, 'I');
+    }
+
+    private static void readReadyForQueryMessage(EmbeddedChannel channel, char txState) {
         ByteBuf response = channel.readOutbound();
         byte[] responseBytes = new byte[6];
         response.readBytes(responseBytes);
-        // ReadyForQuery: 'Z' | int32 len | 'I'
-        assertThat(responseBytes, is(new byte[]{'Z', 0, 0, 0, 5, 'I'}));
+        // ReadyForQuery: 'Z' | int32 len | 'I/T/E'
+        assertThat(responseBytes, is(new byte[]{'Z', 0, 0, 0, 5, (byte) txState}));
     }
 
     private static void readErrorResponse(EmbeddedChannel channel, byte len) {
