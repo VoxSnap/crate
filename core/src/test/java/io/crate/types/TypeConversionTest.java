@@ -167,28 +167,28 @@ public class TypeConversionTest extends CrateUnitTest {
     }
 
     @Test
-    public void testIntegerToDoubleLossOfPrecision() {
+    public void testDoubleToIntegerLossOfPrecision() {
         assertThat(DataTypes.INTEGER.value(1.0), is(1));
         expectedException.expect(IllegalArgumentException.class);
         DataTypes.INTEGER.value(1.4);
     }
 
     @Test
-    public void testIntegerToFloatLossOfPrecision() {
+    public void testFloatToIntegerLossOfPrecision() {
         assertThat(DataTypes.INTEGER.value(1.0f), is(1));
         expectedException.expect(IllegalArgumentException.class);
         DataTypes.INTEGER.value(1.4f);
     }
 
     @Test
-    public void testLongToDoubleLossOfPrecision() {
+    public void testDoubleToLongLossOfPrecision() {
         assertThat(DataTypes.LONG.value(1.0), is(1L));
         expectedException.expect(IllegalArgumentException.class);
         DataTypes.LONG.value(1.4);
     }
 
     @Test
-    public void testLongToFloatLossOfPrecision() {
+    public void testFloatToLongLossOfPrecision() {
         assertThat(DataTypes.LONG.value(1.0f), is(1L));
         expectedException.expect(IllegalArgumentException.class);
         DataTypes.LONG.value(1.4f);
