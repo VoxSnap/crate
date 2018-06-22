@@ -23,10 +23,10 @@
 package io.crate.metadata.functions.params;
 
 import io.crate.analyze.relations.AnalyzedRelation;
+import io.crate.exceptions.ConversionException;
 import io.crate.expression.symbol.Field;
 import io.crate.expression.symbol.FuncArg;
 import io.crate.expression.symbol.Literal;
-import io.crate.exceptions.ConversionException;
 import io.crate.metadata.ColumnIdent;
 import io.crate.metadata.Path;
 import io.crate.test.integration.CrateUnitTest;
@@ -188,7 +188,7 @@ public class FuncParamsTest extends CrateUnitTest {
 
     @Test
     public void testLosslessConversionResultingInDowncast() {
-        FuncArg highPrecedenceType = new Arg(DataTypes.LONG, true, true);
+        FuncArg highPrecedenceType = Literal.of(DataTypes.LONG, 5L);
         FuncArg lowerPrecedenceType = new Arg(DataTypes.INTEGER, true);
         FuncParams params = FuncParams.builder(Param.NUMERIC, Param.NUMERIC).build();
 
@@ -204,16 +204,10 @@ public class FuncParamsTest extends CrateUnitTest {
 
         private final DataType dataType;
         private final boolean castable;
-        private final boolean losslessCast;
 
         Arg(DataType dataType, boolean castable) {
-            this(dataType, castable, false);
-        }
-
-        Arg(DataType dataType, boolean castable, boolean losslessCast) {
             this.dataType = dataType;
             this.castable = castable;
-            this.losslessCast = losslessCast;
         }
 
         @Override
@@ -224,11 +218,6 @@ public class FuncParamsTest extends CrateUnitTest {
         @Override
         public boolean canBeCasted() {
             return castable;
-        }
-
-        @Override
-        public boolean isLosslesslyConvertableTo(DataType dataType) {
-            return losslessCast;
         }
 
         @Override

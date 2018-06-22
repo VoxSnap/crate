@@ -158,7 +158,12 @@ public class Literal<ReturnType> extends Symbol implements Input<ReturnType>, Co
         return true;
     }
 
-    @Override
+    /**
+     * Checks whether this Literal can be converted to the given
+     * DataType without loss of information.
+     * @param dataType The type to check for lossless conversion.
+     * @return True if lossless conversion is possible, false otherwise.
+     */
     public boolean isLosslesslyConvertableTo(DataType dataType) {
         if (!type.isConvertableTo(dataType)) {
             return false;

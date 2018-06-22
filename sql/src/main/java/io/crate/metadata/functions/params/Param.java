@@ -25,6 +25,7 @@ package io.crate.metadata.functions.params;
 import com.google.common.base.Preconditions;
 import io.crate.exceptions.ConversionException;
 import io.crate.expression.symbol.FuncArg;
+import io.crate.expression.symbol.Literal;
 import io.crate.types.ArrayType;
 import io.crate.types.BooleanType;
 import io.crate.types.CollectionType;
@@ -292,9 +293,9 @@ public final class Param {
         final DataType sourceType = source.valueType();
         final DataType targetType = target.valueType();
         // We might be able to convert one of the two losslessly
-        if (source.isLosslesslyConvertableTo(targetType)) {
+        if (source instanceof Literal && ((Literal) source).isLosslesslyConvertableTo(targetType)) {
             return target;
-        } else if (target.isLosslesslyConvertableTo(sourceType)) {
+        } else if (target instanceof Literal && ((Literal) target).isLosslesslyConvertableTo(sourceType)) {
             return source;
         }
 

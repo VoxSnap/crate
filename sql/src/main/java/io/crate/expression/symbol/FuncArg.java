@@ -46,14 +46,4 @@ public interface FuncArg {
      * @return True is casting is possible, false otherwise.
      */
     boolean canBeCasted();
-
-    /**
-     * Checks whether this argument can be converted to the given
-     * DataType without any loss of information.
-     * @param dataType The type to check for lossless conversion.
-     * @return True if lossless conversion is possible, false otherwise.
-     */
-    default boolean isLosslesslyConvertableTo(DataType dataType) {
-        return false;
-    }
 }
