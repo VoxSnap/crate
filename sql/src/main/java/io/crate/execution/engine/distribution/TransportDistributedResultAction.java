@@ -26,10 +26,10 @@ import com.google.common.annotations.VisibleForTesting;
 import io.crate.concurrent.CompletableFutures;
 import io.crate.exceptions.TaskMissing;
 import io.crate.execution.jobs.DownstreamRXTask;
-import io.crate.execution.jobs.TasksService;
-import io.crate.execution.jobs.RootTask;
 import io.crate.execution.jobs.PageBucketReceiver;
 import io.crate.execution.jobs.PageResultListener;
+import io.crate.execution.jobs.RootTask;
+import io.crate.execution.jobs.TasksService;
 import io.crate.execution.jobs.kill.KillJobsRequest;
 import io.crate.execution.jobs.kill.TransportKillJobsNodeAction;
 import io.crate.execution.support.NodeAction;
@@ -53,7 +53,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -62,15 +61,12 @@ public class TransportDistributedResultAction extends AbstractComponent implemen
 
     private static final String DISTRIBUTED_RESULT_ACTION = "crate/sql/node/merge/add_rows";
 
-    private static final String EXECUTOR_NAME = ThreadPool.Names.SEARCH;
-
     private final Transports transports;
     private final TasksService tasksService;
     private final ScheduledExecutorService scheduler;
     private final ClusterService clusterService;
     private final TransportKillJobsNodeAction killJobsAction;
     private final BackoffPolicy backoffPolicy;
-    private final Executor executor;
 
     @Inject
     public TransportDistributedResultAction(Transports transports,
@@ -102,7 +98,6 @@ public class TransportDistributedResultAction extends AbstractComponent implemen
         super(settings);
         this.transports = transports;
         this.tasksService = tasksService;
-        this.executor = threadPool.executor(EXECUTOR_NAME);
         scheduler = threadPool.scheduler();
         this.clusterService = clusterService;
         this.killJobsAction = killJobsAction;
@@ -153,11 +148,12 @@ public class TransportDistributedResultAction extends AbstractComponent implemen
             request.streamers(pageBucketReceiver.streamers());
             SendResponsePageResultListener pageResultListener = new SendResponsePageResultListener();
             try {
-                executor.execute(() -> pageBucketReceiver.setBucket(
+                pageBucketReceiver.setBucket(
                     request.bucketIdx(),
                     request.rows(),
                     request.isLast(),
-                    pageResultListener));
+                    pageResultListener
+                );
                 return pageResultListener.future;
             } catch (EsRejectedExecutionException e) {
                 pageBucketReceiver.failure(request.bucketIdx(), e);
