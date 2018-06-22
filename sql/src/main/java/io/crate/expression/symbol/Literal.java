@@ -165,7 +165,7 @@ public class Literal<ReturnType> extends Symbol implements Input<ReturnType>, Co
         }
         try {
             dataType.value(this.value);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | ClassCastException e) {
             return false;
         }
         return true;
