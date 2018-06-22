@@ -166,6 +166,34 @@ public class TypeConversionTest extends CrateUnitTest {
         DataTypes.INTEGER.value(Long.MIN_VALUE);
     }
 
+    @Test
+    public void testIntegerToDoubleLossOfPrecision() {
+        assertThat(DataTypes.INTEGER.value(1.0), is(1));
+        expectedException.expect(IllegalArgumentException.class);
+        DataTypes.INTEGER.value(1.4);
+    }
+
+    @Test
+    public void testIntegerToFloatLossOfPrecision() {
+        assertThat(DataTypes.INTEGER.value(1.0f), is(1));
+        expectedException.expect(IllegalArgumentException.class);
+        DataTypes.INTEGER.value(1.4f);
+    }
+
+    @Test
+    public void testLongToDoubleLossOfPrecision() {
+        assertThat(DataTypes.LONG.value(1.0), is(1L));
+        expectedException.expect(IllegalArgumentException.class);
+        DataTypes.LONG.value(1.4);
+    }
+
+    @Test
+    public void testLongToFloatLossOfPrecision() {
+        assertThat(DataTypes.LONG.value(1.0f), is(1L));
+        expectedException.expect(IllegalArgumentException.class);
+        DataTypes.LONG.value(1.4f);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testFloatOutOfRangePositive() throws Exception {
         DataTypes.FLOAT.value(Double.MAX_VALUE);

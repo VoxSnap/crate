@@ -107,6 +107,9 @@ Changes
 Fixes
 =====
 
+- Disallowed floats/doubles to be converted to integer/long with loss of
+  precision.
+
 - Fixed an issue which could result in lost entries at the ``sys.jobs_log`` and
   ``sys.operations_log`` tables when the related settings are changed while
   entries are written.

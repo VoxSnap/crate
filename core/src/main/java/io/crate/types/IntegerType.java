@@ -70,12 +70,17 @@ public class IntegerType extends DataType<Integer> implements Streamer<Integer>,
         if (value instanceof BytesRef) {
             return Integer.parseInt(((BytesRef) value).utf8ToString());
         }
-
         long longVal = ((Number) value).longValue();
         if (longVal < Integer.MIN_VALUE || Integer.MAX_VALUE < longVal) {
             throw new IllegalArgumentException("integer value out of range: " + longVal);
         }
-        return ((Number) value).intValue();
+        Integer intValue = ((Number) value).intValue();
+        if (value instanceof Double && intValue.doubleValue() != (double) value) {
+            throw new IllegalArgumentException("Loss of precision for this double");
+        } else if (value instanceof Float && intValue.doubleValue() != (float) value) {
+            throw new IllegalArgumentException("Loss of precision for this float");
+        }
+        return intValue;
     }
 
     @Override
