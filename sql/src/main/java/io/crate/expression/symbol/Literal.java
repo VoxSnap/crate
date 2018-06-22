@@ -159,6 +159,19 @@ public class Literal<ReturnType> extends Symbol implements Input<ReturnType>, Co
     }
 
     @Override
+    public boolean isLosslesslyConvertableTo(DataType dataType) {
+        if (!type.isConvertableTo(dataType)) {
+            return false;
+        }
+        try {
+            dataType.value(this.value);
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
     public <C, R> R accept(SymbolVisitor<C, R> visitor, C context) {
         return visitor.visitLiteral(this, context);
     }

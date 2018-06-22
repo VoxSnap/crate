@@ -41,7 +41,7 @@ public class TypeInferenceTest extends AbstractScalarFunctionsTest {
 
         expectedException.expect(ConversionException.class);
         expectedException.expectMessage("Cannot cast 'foo' to type long");
-        assertEvaluate("'foo' = 1", true);
+        assertEvaluate("'foo' = [1]", true);
     }
 
     @Test
@@ -64,10 +64,11 @@ public class TypeInferenceTest extends AbstractScalarFunctionsTest {
         assertEvaluate("case 1 when 1 then 'foo' else 'bar' end", "foo");
         assertEvaluate("case 1 when 1.1 then 'foo' else 'bar' end", "bar");
         assertEvaluate("case 1 when 1.0 then 'foo' else 'bar' end", "foo");
+        assertEvaluate("case 1 when 'foo' then 'foo' else 'bar' end", "bar");
 
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'foo' to type long");
-        assertEvaluate("case 1 when 'foo' then 'foo' else 'bar' end", "bar");
+        expectedException.expectMessage("Cannot cast 1 to type string_array");
+        assertEvaluate("case 1 when ['foo'] then 'foo' else 'bar' end", "bar");
     }
 
     @Test
@@ -76,10 +77,11 @@ public class TypeInferenceTest extends AbstractScalarFunctionsTest {
         assertEvaluate("1.0 in (null, 1::integer, 2::long, 3.0)", true);
         assertEvaluate("1.2 in (1::integer, 2::long, 3.0)", false);
         assertEvaluate("1.2 in (null, 1::integer, 2::long, 3.0)", null);
+        assertEvaluate("1 in (null, 1::integer, 2::long, 3.0, 'foo')", true);
 
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'foo' to type double");
-        assertEvaluate("1 in (null, 1::integer, 2::long, 3.0, 'foo')", true);
+        expectedException.expectMessage("Cannot cast 1 to type string_array");
+        assertEvaluate("1 in (null, 1::integer, 2::long, 3.0, ['foo'])", true);
     }
 
     @Test
@@ -88,10 +90,11 @@ public class TypeInferenceTest extends AbstractScalarFunctionsTest {
         assertEvaluate("1.0 = ANY ([null, 1::integer, 2::long, 3.0])", true);
         assertEvaluate("1.0 = ANY ([1::integer, 2::long, 3.0])", true);
         assertEvaluate("1.2 = ANY ([null, 1::integer, 2::long, 3.0])", null);
+        assertEvaluate("1 = ANY ([null, 1::integer, 2::long, 3.0, 'foo'])", true);
 
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'foo' to type double");
-        assertEvaluate("1 = ANY ([null, 1::integer, 2::long, 3.0, 'foo'])", true);
+        expectedException.expectMessage("Cannot cast 1 to type string_array");
+        assertEvaluate("1 = ANY ([null, 1::integer, 2::long, 3.0, ['foo']])", true);
     }
 
     /**

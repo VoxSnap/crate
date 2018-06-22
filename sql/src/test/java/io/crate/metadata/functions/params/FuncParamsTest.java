@@ -186,14 +186,34 @@ public class FuncParamsTest extends CrateUnitTest {
         assertThat(signature, is(list(DataTypes.INTEGER, integerArrayType)));
     }
 
+    @Test
+    public void testLosslessConversionResultingInDowncast() {
+        FuncArg highPrecedenceType = new Arg(DataTypes.LONG, true, true);
+        FuncArg lowerPrecedenceType = new Arg(DataTypes.INTEGER, true);
+        FuncParams params = FuncParams.builder(Param.NUMERIC, Param.NUMERIC).build();
+
+        List<DataType> signature;
+        signature = params.match(list(highPrecedenceType, lowerPrecedenceType));
+        assertThat(signature, is(list(DataTypes.INTEGER, DataTypes.INTEGER)));
+
+        signature = params.match(list(lowerPrecedenceType, highPrecedenceType));
+        assertThat(signature, is(list(DataTypes.INTEGER, DataTypes.INTEGER)));
+    }
+
     private static class Arg implements FuncArg {
 
         private final DataType dataType;
         private final boolean castable;
+        private final boolean losslessCast;
 
         Arg(DataType dataType, boolean castable) {
+            this(dataType, castable, false);
+        }
+
+        Arg(DataType dataType, boolean castable, boolean losslessCast) {
             this.dataType = dataType;
             this.castable = castable;
+            this.losslessCast = losslessCast;
         }
 
         @Override
@@ -204,6 +224,11 @@ public class FuncParamsTest extends CrateUnitTest {
         @Override
         public boolean canBeCasted() {
             return castable;
+        }
+
+        @Override
+        public boolean isLosslesslyConvertableTo(DataType dataType) {
+            return losslessCast;
         }
 
         @Override

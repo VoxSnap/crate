@@ -137,8 +137,8 @@ public class CompoundLiteralTest extends CrateUnitTest {
     @Test
     public void testArrayDifferentTypes() throws Exception {
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'string' to type long");
-        analyzeExpression("[1, 'string']");
+        expectedException.expectMessage("Cannot cast 1.1 to type string_array");
+        analyzeExpression("[1.1, ['string']]");
     }
 
     @Test

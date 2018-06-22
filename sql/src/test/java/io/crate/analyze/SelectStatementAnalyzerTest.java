@@ -491,8 +491,8 @@ public class SelectStatementAnalyzerTest extends CrateDummyClusterServiceUnitTes
     @Test
     public void testWhereInSelectDifferentDataTypeValueIncompatibleDataTypes() throws Exception {
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'foo' to type long");
-        analyze("select 'found' from users where 1 in (1, 'foo', 2)");
+        expectedException.expectMessage("Cannot cast 1 to type string_array");
+        analyze("select 'found' from users where 1 in (1, ['foo'], 2)");
     }
 
     @Test

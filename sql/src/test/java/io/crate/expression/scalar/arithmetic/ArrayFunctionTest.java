@@ -35,8 +35,8 @@ public class ArrayFunctionTest extends AbstractScalarFunctionsTest {
     @Test
     public void testTypeValidation() throws Exception {
         expectedException.expect(ConversionException.class);
-        expectedException.expectMessage("Cannot cast 'foo' to type long");
-        assertEvaluate("ARRAY[1, 'foo']", null);
+        expectedException.expectMessage("Cannot cast 1 to type string_array");
+        assertEvaluate("ARRAY[1, ['foo']]", null);
     }
 
     @Test

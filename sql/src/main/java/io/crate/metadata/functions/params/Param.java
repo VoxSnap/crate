@@ -34,6 +34,7 @@ import io.crate.types.IntegerType;
 import io.crate.types.LongType;
 import io.crate.types.SetType;
 import io.crate.types.StringType;
+import io.crate.types.UndefinedType;
 
 import javax.annotation.Nullable;
 import java.util.ArrayDeque;
@@ -286,27 +287,43 @@ public final class Param {
             target = arg2;
             source = arg1;
         }
-        if (source.canBeCasted() && source.valueType().isConvertableTo(target.valueType()) &&
-            isTypeValid(target.valueType())) {
+
+
+        final DataType sourceType = source.valueType();
+        final DataType targetType = target.valueType();
+        // We might be able to convert one of the two losslessly
+        if (source.isLosslesslyConvertableTo(targetType)) {
             return target;
-        } else if (target.canBeCasted() && target.valueType().isConvertableTo(source.valueType()) &&
-                   isTypeValid(source.valueType())) {
+        } else if (target.isLosslesslyConvertableTo(sourceType)) {
+            return source;
+        }
+
+        if (source.canBeCasted() && isTypeValid(targetType)) {
+            return target;
+        } else if (target.canBeCasted() && isTypeValid(sourceType)) {
             return source;
         }
 
         // if neither the source, nor the target can be casted, yet either one *IS* convertible to the other, we will
         // try to do the conversion (comparing two columns will never utilize the index anyway)
         if (source.canBeCasted() == false && target.canBeCasted() == false) {
-            if (source.valueType().isConvertableTo(target.valueType())) {
+            if (sourceType.isConvertableTo(targetType) && isTypeValid(targetType)) {
                 return target;
-            } else if (target.valueType().isConvertableTo(source.valueType())) {
+            } else if (targetType.isConvertableTo(sourceType) && isTypeValid(targetType)) {
                 return source;
             }
         }
+
         return null;
     }
 
     private boolean isTypeValid(DataType dataType) {
+        if (dataType.id() == UndefinedType.ID) {
+            return false;
+        }
+        if (DataTypes.isCollectionType(dataType) && ((CollectionType) dataType).innerType().id() == UndefinedType.ID) {
+            return false;
+        }
         return validTypes.isEmpty() || validTypes.contains(dataType);
     }
 
