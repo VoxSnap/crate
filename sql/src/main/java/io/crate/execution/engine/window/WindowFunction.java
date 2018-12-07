@@ -22,36 +22,16 @@
 
 package io.crate.execution.engine.window;
 
-import io.crate.data.Input;
-import io.crate.data.Row;
-import io.crate.execution.engine.aggregation.AggregationFunction;
-import io.crate.execution.engine.collect.CollectExpression;
+public interface WindowFunction {
 
-import java.util.List;
+    /**
+     * Computes the window function for the row identified by the provided {@param rowIdx}.
+     * This method should be called sequentially for all the rows in a window, with each's row corresponding window
+     * frame state {@link WindowFrameState}.
+     *
+     * @param rowIdx       the 0-indexed id of the current window row.
+     * @param currentFrame the frame the row identified by {@param rowIdx} is part of.
+     */
+    Object execute(int rowIdx, WindowFrameState currentFrame);
 
-public class WindowFunctionContext {
-
-    private final List<Input<?>> inputs;
-    private final AggregationFunction function;
-    private final List<? extends CollectExpression<Row, ?>> expressions;
-
-    public WindowFunctionContext(List<Input<?>> inputs,
-                                 AggregationFunction function,
-                                 List<? extends CollectExpression<Row, ?>> expressions) {
-        this.inputs = inputs;
-        this.function = function;
-        this.expressions = expressions;
-    }
-
-    public List<Input<?>> inputs() {
-        return inputs;
-    }
-
-    public AggregationFunction function() {
-        return function;
-    }
-
-    public List<? extends CollectExpression<Row, ?>> expressions() {
-        return expressions;
-    }
 }

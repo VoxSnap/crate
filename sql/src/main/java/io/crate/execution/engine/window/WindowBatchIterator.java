@@ -22,6 +22,7 @@
 
 package io.crate.execution.engine.window;
 
+import io.crate.analyze.OrderBy;
 import io.crate.analyze.WindowDefinition;
 import io.crate.data.BatchIterator;
 import io.crate.data.Input;
@@ -30,11 +31,10 @@ import io.crate.data.Row;
 import io.crate.data.RowN;
 import io.crate.execution.engine.collect.CollectExpression;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collector;
 
 /**
  * BatchIterator that computes an aggregate or window function against a window over the source batch iterator.
@@ -66,43 +66,53 @@ import java.util.stream.Collector;
 public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row> {
 
     private final BatchIterator<Row> source;
-    private final Collector<Row, ?, Iterable<Row>> collector;
+    private final List<WindowFunction> functions;
     private final WindowDefinition windowDefinition;
     private final Object[] outgoingCells;
     private final LinkedList<Object[]> standaloneOutgoingCells;
+    private final LinkedList<Object[]> resultsForCurrentFrame;
     private final List<CollectExpression<Row, ?>> standaloneExpressions;
 
-    private Row currentElement;
+    private Row currentWindowRow;
+    /**
+     * Represents the "window row", the row for which we are computing the window, and once that's complete, execute the
+     * window function for.
+     */
+    private Object[] currentRowCells = null;
 
     private int sourceRowsConsumed;
     private int windowRowPosition;
-    private final List<Row> peerRows = new ArrayList<>();
-    private boolean peersCollected = false;
-    private Row prevRow = null;
-    private int collectorNumberOfColumns;
+    private final List<Row> windowForCurrentRow = new ArrayList<>();
+    private boolean foundCurrentRowsLastPeer = false;
+    private int windowFunctionsCount;
 
     WindowBatchIterator(WindowDefinition windowDefinition,
                         List<Input<?>> standaloneInputs,
                         List<CollectExpression<Row, ?>> standaloneExpressions,
-                        int windowFunctionsCount,
                         BatchIterator<Row> source,
-                        Collector<Row, ?, Iterable<Row>> collector) {
-        assert windowDefinition.partitions().size() == 0 : "Only empty OVER() is supported now";
-        assert windowDefinition.orderBy() == null : "Only empty OVER() is supported now";
-        assert windowDefinition.windowFrameDefinition() == null : "Only empty OVER() is supported now";
+                        List<WindowFunction> functions) {
+        assert windowDefinition.partitions().size() == 0 : "Window partitions are not supported.";
+        assert windowDefinition.windowFrameDefinition() == null : "Window frame definitions are not supported";
 
         this.windowDefinition = windowDefinition;
         this.source = source;
-        this.collector = collector;
         this.standaloneExpressions = standaloneExpressions;
+        this.windowFunctionsCount = functions.size();
         this.outgoingCells = new Object[windowFunctionsCount + standaloneInputs.size()];
         this.standaloneOutgoingCells = new LinkedList<>();
+        this.resultsForCurrentFrame = new LinkedList<>();
+        this.functions = functions;
     }
 
-    @SuppressWarnings("unused")
-    private boolean arePeers(@Nullable Row prevRow, Row nextRow) {
-        // all rows are peers when orderBy is missing
-        return windowDefinition.orderBy() == null;
+    private boolean arePeers(Object[] prevRowCells, Object[] currentRowCells) {
+        OrderBy orderBy = windowDefinition.orderBy();
+        if (orderBy == null) {
+            // all rows are peers when orderBy is missing
+            return true;
+        }
+
+        return prevRowCells == currentRowCells ||
+               Arrays.equals(prevRowCells, currentRowCells);
     }
 
     @Override
@@ -112,11 +122,7 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
 
     @Override
     public Row currentElement() {
-        if (standaloneOutgoingCells.size() > 0) {
-            Object[] inputRowCells = standaloneOutgoingCells.removeFirst();
-            System.arraycopy(inputRowCells, 0, outgoingCells, collectorNumberOfColumns, inputRowCells.length);
-        }
-        return currentElement;
+        return currentWindowRow;
     }
 
     @Override
@@ -124,50 +130,75 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
         super.moveToStart();
         sourceRowsConsumed = 0;
         windowRowPosition = 0;
-        peerRows.clear();
-        prevRow = null;
-        currentElement = null;
+        windowForCurrentRow.clear();
+        currentRowCells = null;
+        currentWindowRow = null;
     }
 
     @Override
     public boolean moveNext() {
-        if (peersCollected && windowRowPosition < sourceRowsConsumed) {
+        if (foundCurrentRowsLastPeer && windowRowPosition < sourceRowsConsumed - 1) {
             // emit the result of the window function as we computed the result and not yet emitted it for every row
             // in the window
             windowRowPosition++;
+            computeCurrentElement();
             return true;
         }
 
         while (source.moveNext()) {
             sourceRowsConsumed++;
-            Row sourceRow = source.currentElement();
-            computeAndFillStandaloneOutgoingCellsFor(sourceRow);
+            Row currentSourceRow = source.currentElement();
+            computeAndFillStandaloneOutgoingCellsFor(currentSourceRow);
+            Object[] sourceRowCells = currentSourceRow.materialize();
+            if (sourceRowsConsumed == 1) {
+                // first row in the source is the "current window row" we start with
+                currentRowCells = sourceRowCells;
+            }
 
-            if (arePeers(prevRow, sourceRow)) {
-                peersCollected = false;
-                RowN materializedRow = new RowN(sourceRow.materialize());
-                peerRows.add(materializedRow);
-                prevRow = materializedRow;
+            if (arePeers(currentRowCells, sourceRowCells)) {
+                windowForCurrentRow.add(new RowN(sourceRowCells));
+                foundCurrentRowsLastPeer = false;
             } else {
-                // rows are not peers anymore so compute the window function and emit the result
-                collectPeers();
+                foundCurrentRowsLastPeer = true;
+
+                executeWindowFunctions();
+                // on the next source iteration, we'll start building the window for the next window row
+                currentRowCells = sourceRowCells;
+                windowForCurrentRow.add(new RowN(currentRowCells));
                 windowRowPosition++;
+                computeCurrentElement();
                 return true;
             }
         }
 
         if (source.allLoaded()) {
-            if (!peersCollected) {
-                collectPeers();
+            if (!windowForCurrentRow.isEmpty()) {
+                // we're done with consuming the source iterator, but were still in the process of building up the
+                // window for the current window row. As there are no more rows to process, execute the function against
+                // what we currently accumulated in the window and emit the result.
+                executeWindowFunctions();
             }
 
             if (windowRowPosition < sourceRowsConsumed) {
                 // we still need to emit rows
                 windowRowPosition++;
+                computeCurrentElement();
                 return true;
             }
         }
         return false;
+    }
+
+    private void computeCurrentElement() {
+        if (resultsForCurrentFrame.size() > 0) {
+            Object[] windowFunctionsResult = resultsForCurrentFrame.removeFirst();
+            System.arraycopy(windowFunctionsResult, 0, outgoingCells, 0, windowFunctionsResult.length);
+        }
+        if (standaloneOutgoingCells.size() > 0) {
+            Object[] inputRowCells = standaloneOutgoingCells.removeFirst();
+            System.arraycopy(inputRowCells, 0, outgoingCells, windowFunctionsCount, inputRowCells.length);
+        }
+        currentWindowRow = new RowN(outgoingCells);
     }
 
     private void computeAndFillStandaloneOutgoingCellsFor(Row sourceRow) {
@@ -182,16 +213,28 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
         }
     }
 
-    private void collectPeers() {
-        Iterable<Row> rows = peerRows.stream().collect(collector);
-        peerRows.clear();
-        peersCollected = true;
-        Row collectedRow = rows.iterator().next();
-        collectorNumberOfColumns = collectedRow.numColumns();
-        for (int i = 0; i < collectorNumberOfColumns; i++) {
-            outgoingCells[i] = collectedRow.get(i);
+    private void executeWindowFunctions() {
+        int startPosition = windowRowPosition;
+        WindowFrameState currentFrame = new WindowFrameState(
+            startPosition,
+            startPosition + windowForCurrentRow.size(),
+            windowForCurrentRow
+        );
+
+        Object[][] cellsForCurrentFrame = new Object[windowForCurrentRow.size()][windowFunctionsCount];
+
+        for (int i = 0; i < windowForCurrentRow.size(); i++) {
+            for (int funcIdx = 0; funcIdx < functions.size(); funcIdx++) {
+                WindowFunction function = functions.get(funcIdx);
+                Object result = function.execute(windowRowPosition + i, currentFrame);
+                cellsForCurrentFrame[i][funcIdx] = result;
+            }
         }
-        currentElement = new RowN(outgoingCells);
-        prevRow = null;
+
+        for (Object[] outgoingCells : cellsForCurrentFrame) {
+            resultsForCurrentFrame.push(outgoingCells);
+        }
+
+        windowForCurrentRow.clear();
     }
 }
