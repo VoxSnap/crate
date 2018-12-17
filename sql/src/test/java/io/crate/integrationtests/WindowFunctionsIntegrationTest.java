@@ -37,8 +37,8 @@ public class WindowFunctionsIntegrationTest extends SQLTransportIntegrationTest 
 
     @Test
     public void testMultipleWindowFunctions() {
-        execute("select avg(col1) OVER(), sum(col1) OVER() from unnest([1, 2, null])");
-        assertThat(printedTable(response.rows()), is("1.5| 3\n1.5| 3\n1.5| 3\n"));
+        execute("select col1, sum(col1) OVER(ORDER BY col1), sum(col2) OVER(ORDER BY col2) from unnest([1, 2, 2, 3], [5, 6, 6, 7])");
+        assertThat(printedTable(response.rows()), is("1| 1| 5\n2| 5| 17\n2| 5| 17\n3| 8| 24\n"));
     }
 
     @Test
