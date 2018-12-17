@@ -22,8 +22,6 @@
 
 package io.crate.execution.engine.window;
 
-import io.crate.data.Row;
-
 import java.util.List;
 
 /**
@@ -33,9 +31,9 @@ final class WindowFrameState {
 
     private final int lowerBound;
     private final int upperBoundExclusive;
-    private List<Row> rows;
+    private List<Object[]> rows;
 
-    WindowFrameState(int lowerBound, int upperBoundExclusive, List<Row> rows) {
+    WindowFrameState(int lowerBound, int upperBoundExclusive, List<Object[]> rows) {
         this.lowerBound = lowerBound;
         this.upperBoundExclusive = upperBoundExclusive;
         this.rows = rows;
@@ -49,7 +47,7 @@ final class WindowFrameState {
         return upperBoundExclusive;
     }
 
-    public Iterable<Row> getRows() {
+    public Iterable<Object[]> getRows() {
         return rows;
     }
 }

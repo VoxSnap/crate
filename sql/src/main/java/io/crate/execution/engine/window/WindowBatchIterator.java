@@ -82,7 +82,7 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
 
     private int sourceRowsConsumed;
     private int windowRowPosition;
-    private final List<Row> windowForCurrentRow = new ArrayList<>();
+    private final List<Object[]> windowForCurrentRow = new ArrayList<>();
     private boolean foundCurrentRowsLastPeer = false;
     private int windowFunctionsCount;
 
@@ -156,7 +156,7 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
             }
 
             if (arePeers(currentRowCells, sourceRowCells)) {
-                windowForCurrentRow.add(new RowN(sourceRowCells));
+                windowForCurrentRow.add(sourceRowCells);
                 foundCurrentRowsLastPeer = false;
             } else {
                 foundCurrentRowsLastPeer = true;
@@ -164,7 +164,7 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
                 executeWindowFunctions();
                 // on the next source iteration, we'll start building the window for the next window row
                 currentRowCells = sourceRowCells;
-                windowForCurrentRow.add(new RowN(currentRowCells));
+                windowForCurrentRow.add(currentRowCells);
                 windowRowPosition++;
                 computeCurrentElement();
                 return true;

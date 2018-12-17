@@ -25,6 +25,7 @@ package io.crate.execution.engine.window;
 import io.crate.breaker.RamAccountingContext;
 import io.crate.data.Input;
 import io.crate.data.Row;
+import io.crate.data.RowN;
 import io.crate.execution.engine.aggregation.AggregationFunction;
 import io.crate.execution.engine.collect.CollectExpression;
 import org.elasticsearch.Version;
@@ -73,9 +74,9 @@ public class AggregateToWindowFunctionAdapter implements WindowFunction {
 
     private void executeAggregateForFrame(WindowFrameState frame) {
         seenFrameUpperBound = frame.upperBoundExclusive();
-        for (Row row : frame.getRows()) {
+        for (Object[] cells : frame.getRows()) {
             for (int i = 0, expressionsSize = expressions.size(); i < expressionsSize; i++) {
-                expressions.get(i).setNextRow(row);
+                expressions.get(i).setNextRow(new RowN(cells));
             }
             accumulatedState = aggregationFunction.iterate(ramAccountingContext, accumulatedState, inputs);
         }
@@ -88,6 +89,6 @@ public class AggregateToWindowFunctionAdapter implements WindowFunction {
     }
 
     private boolean isReiteratingWindow(WindowFrameState frame) {
-        return seenFrameUpperBound > 0 && frame.lowerBound() == 0;
+        return frame.upperBoundExclusive() < seenFrameUpperBound && frame.lowerBound() == 0;
     }
 }
