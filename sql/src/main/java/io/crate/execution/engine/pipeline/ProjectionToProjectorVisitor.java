@@ -104,6 +104,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -581,7 +582,7 @@ public class ProjectionToProjectorVisitor
 
     @Override
     public Projector visitWindowAgg(WindowAggProjection windowAgg, Context context) {
-        Map<io.crate.expression.symbol.WindowFunction, List<Symbol>> functionsWithInputs = windowAgg.functionsWithInputs();
+        LinkedHashMap<io.crate.expression.symbol.WindowFunction, List<Symbol>> functionsWithInputs = windowAgg.functionsWithInputs();
 
         ArrayList<WindowFunction> windowFunctions = new ArrayList<>(functionsWithInputs.size());
         for (Map.Entry<io.crate.expression.symbol.WindowFunction, List<Symbol>> functionAndInputsEntry : functionsWithInputs.entrySet()) {
@@ -590,7 +591,14 @@ public class ProjectionToProjectorVisitor
 
             FunctionImplementation impl = this.functions.getQualified((functionAndInputsEntry.getKey()).info().ident());
             assert impl instanceof AggregationFunction : "We currently only support aggregation functions as window functions";
-            windowFunctions.add(new AggregateToWindowFunctionAdapter(ctx.topLevelInputs().toArray(new Input[0]), (AggregationFunction) impl, ctx.expressions(), indexVersionCreated, bigArrays, context.ramAccountingContext));
+            windowFunctions.add(
+                new AggregateToWindowFunctionAdapter(
+                    ctx.topLevelInputs().toArray(new Input[0]),
+                    (AggregationFunction) impl, ctx.expressions(),
+                    indexVersionCreated,
+                    bigArrays,
+                    context.ramAccountingContext)
+            );
         }
 
         InputFactory.Context<CollectExpression<Row, ?>> contextForStandaloneInputs = inputFactory.ctxForInputColumns(context.txnCtx);
@@ -600,7 +608,8 @@ public class ProjectionToProjectorVisitor
             windowAgg.windowDefinition(),
             windowFunctions,
             contextForStandaloneInputs.topLevelInputs(),
-            contextForStandaloneInputs.expressions());
+            contextForStandaloneInputs.expressions(),
+            windowAgg.orderByIndexes());
     }
 
     @Override

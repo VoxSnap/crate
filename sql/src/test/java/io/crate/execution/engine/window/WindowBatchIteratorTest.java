@@ -51,8 +51,8 @@ public class WindowBatchIteratorTest {
                 Collections.emptyList(),
                 Collections.emptyList(),
                 TestingBatchIterators.range(0, 10),
-                Collections.singletonList(rowNumberWindowFunction())
-            )
+                Collections.singletonList(rowNumberWindowFunction()),
+                null)
         );
 
         tester.verifyResultAndEdgeCaseBehaviour(expectedRowNumberResult);
@@ -67,8 +67,8 @@ public class WindowBatchIteratorTest {
                 Collections.emptyList(),
                 new BatchSimulatingIterator<>(
                     TestingBatchIterators.range(0, 10), 4, 2, null),
-                Collections.singletonList(rowNumberWindowFunction())
-            )
+                Collections.singletonList(rowNumberWindowFunction()),
+                null)
         );
 
         tester.verifyResultAndEdgeCaseBehaviour(expectedRowNumberResult);
@@ -89,7 +89,8 @@ public class WindowBatchIteratorTest {
             Collections.emptyList(),
             Collections.emptyList(),
             TestingBatchIterators.range(0, 10),
-            Collections.singletonList(frameBoundsWindowFunction)), null);
+            Collections.singletonList(frameBoundsWindowFunction),
+            null), null);
 
         Object[] expectedBounds = {tuple(0, 10)};
         List<Object[]> result = consumer.getResult();

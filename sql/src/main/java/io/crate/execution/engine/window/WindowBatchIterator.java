@@ -31,10 +31,12 @@ import io.crate.data.Row;
 import io.crate.data.RowN;
 import io.crate.execution.engine.collect.CollectExpression;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.BiFunction;
 
 /**
  * BatchIterator that computes an aggregate or window function against a window over the source batch iterator.
@@ -67,11 +69,11 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
 
     private final BatchIterator<Row> source;
     private final List<WindowFunction> functions;
-    private final WindowDefinition windowDefinition;
     private final Object[] outgoingCells;
     private final LinkedList<Object[]> standaloneOutgoingCells;
     private final LinkedList<Object[]> resultsForCurrentFrame;
     private final List<CollectExpression<Row, ?>> standaloneExpressions;
+    private final BiFunction<Object[], Object[], Boolean> peerCellsValidator;
 
     private Row currentWindowRow;
     /**
@@ -85,16 +87,19 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
     private final List<Object[]> windowForCurrentRow = new ArrayList<>();
     private boolean foundCurrentRowsLastPeer = false;
     private int windowFunctionsCount;
+    private final OrderBy order;
 
     WindowBatchIterator(WindowDefinition windowDefinition,
                         List<Input<?>> standaloneInputs,
                         List<CollectExpression<Row, ?>> standaloneExpressions,
                         BatchIterator<Row> source,
-                        List<WindowFunction> functions) {
+                        List<WindowFunction> functions,
+                        @Nullable int[] orderByIndexes) {
         assert windowDefinition.partitions().size() == 0 : "Window partitions are not supported.";
         assert windowDefinition.windowFrameDefinition().equals(WindowDefinition.DEFAULT_WINDOW_FRAME) : "Custom window frame definitions are not supported";
+        assert windowDefinition.orderBy() == null || orderByIndexes != null : "Window is ordered but the IC indexes are not specified";
 
-        this.windowDefinition = windowDefinition;
+        this.order = windowDefinition.orderBy();
         this.source = source;
         this.standaloneExpressions = standaloneExpressions;
         this.windowFunctionsCount = functions.size();
@@ -102,17 +107,25 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
         this.standaloneOutgoingCells = new LinkedList<>();
         this.resultsForCurrentFrame = new LinkedList<>();
         this.functions = functions;
+
+        peerCellsValidator = (prevRowCells, currentRowCells) -> {
+            for (int i = 0; i < orderByIndexes.length; i++) {
+                int samplingIndex = orderByIndexes[i];
+                if (!prevRowCells[samplingIndex].equals(currentRowCells[samplingIndex])) {
+                    return Boolean.FALSE;
+                }
+            }
+            return Boolean.TRUE;
+        };
     }
 
     private boolean arePeers(Object[] prevRowCells, Object[] currentRowCells) {
-        OrderBy orderBy = windowDefinition.orderBy();
-        if (orderBy == null) {
+        if (order == null) {
             // all rows are peers when orderBy is missing
             return true;
         }
 
-        return prevRowCells == currentRowCells ||
-               Arrays.equals(prevRowCells, currentRowCells);
+        return prevRowCells == currentRowCells || peerCellsValidator.apply(prevRowCells, currentRowCells);
     }
 
     @Override
@@ -148,8 +161,8 @@ public class WindowBatchIterator extends MappedForwardingBatchIterator<Row, Row>
         while (source.moveNext()) {
             sourceRowsConsumed++;
             Row currentSourceRow = source.currentElement();
-            computeAndFillStandaloneOutgoingCellsFor(currentSourceRow);
             Object[] sourceRowCells = currentSourceRow.materialize();
+            computeAndFillStandaloneOutgoingCellsFor(currentSourceRow);
             if (sourceRowsConsumed == 1) {
                 // first row in the source is the "current window row" we start with
                 currentRowCells = sourceRowCells;

@@ -29,6 +29,7 @@ import io.crate.data.Projector;
 import io.crate.data.Row;
 import io.crate.execution.engine.collect.CollectExpression;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 public class WindowProjector implements Projector {
@@ -37,15 +38,19 @@ public class WindowProjector implements Projector {
     private final List<Input<?>> standaloneInputs;
     private final List<CollectExpression<Row, ?>> standaloneExpressions;
     private final List<WindowFunction> windowFunctions;
+    @Nullable
+    private final int[] orderByIndexes;
 
     public WindowProjector(WindowDefinition windowDefinition,
                            List<WindowFunction> windowFunctions,
                            List<Input<?>> standaloneInputs,
-                           List<CollectExpression<Row, ?>> standaloneExpressions) {
+                           List<CollectExpression<Row, ?>> standaloneExpressions,
+                           @Nullable int[] orderByIndexes) {
         this.windowDefinition = windowDefinition;
         this.standaloneInputs = standaloneInputs;
         this.standaloneExpressions = standaloneExpressions;
         this.windowFunctions = windowFunctions;
+        this.orderByIndexes = orderByIndexes;
     }
 
     @Override
@@ -55,6 +60,7 @@ public class WindowProjector implements Projector {
             standaloneInputs,
             standaloneExpressions,
             batchIterator,
-            windowFunctions);
+            windowFunctions,
+            orderByIndexes);
     }
 }
